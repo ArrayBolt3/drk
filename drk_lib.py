@@ -45,3 +45,36 @@ def get_source_db(release):
                     src_package_dict[src_package["Package"]] = src_package
 
     return src_package_dict
+
+def get_binary_db(release):
+    if release != "unstable" and release != "rolling" and release != "testing":
+        raise ValueError("Invalid release specified.")
+
+    bin_package_dict = dict()
+    packages_file_list = []
+    for filename in os.listdir("/var/lib/apt/lists"):
+        file = os.path.join("/var/lib/apt/lists", filename)
+        if os.path.isfile(file):
+            find_sources_regex = re.compile(".*" + release + "_.*_binary-.*_Packages")
+            if re.match(find_sources_regex, file):
+                packages_file_list.append(file)
+
+    for file in packages_file_list:
+        with open(file, "r") as fh:
+            for bin_package in Packages.iter_paragraphs(fh):
+                if not "Package" in bin_package:
+                    continue
+
+                if not "Version" in bin_package:
+                    continue
+
+                if not bin_package["Package"] in bin_package_dict:
+                    bin_package_dict[bin_package["Package"]] = bin_package
+                    continue
+
+                orig_version = NativeVersion(bin_package_dict[bin_package["Package"]]["Version"])
+                new_version = NativeVersion(bin_package["Version"])
+                if orig_version < new_version:
+                    bin_package_dict[bin_package["Package"]] = bin_package
+
+    return bin_package_dict
