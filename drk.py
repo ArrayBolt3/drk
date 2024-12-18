@@ -1,9 +1,11 @@
 # drk - Debian Rolling Kit
-# Licensed under the GNU General Public License version 2, or (at your option) any later version.
+# Licensed under the GNU General Public License version 2, or (at your option)
+# any later version.
 #
 # drk.py - Main entry point
-
+import drk_lib
 from drk_lib import *
+import drk_list_versions
 import drk_generate_dep_list
 import sys
 
@@ -14,22 +16,22 @@ Run DRK commands.
 Available commands:
   list-versions      Shows the versions of a package in Testing, Rolling, and Unstable
   generate-dep-list  Get a list containing a package and its dependencies
-  add-package        Copy a package and its dependencies from Unstable to Rolling
   remove-package     Removes a package from Rolling
   clean-archive      Automatically removes obsolete packages from Rolling""")
 
 def main():
+    drk_lib.load_rolling_pkg_list()
     match drk_command:
         case "list-versions":
-            print(1)
+            drk_list_versions.run_command()
         case "generate-dep-list":
             drk_generate_dep_list.run_command()
         case "add-package":
-            print(3)
-        case "remove-package":
             print(4)
-        case "clean-archive":
+        case "remove-package":
             print(5)
+        case "clean-archive":
+            print(6)
         case default:
             print_usage()
 
