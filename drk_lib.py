@@ -7,52 +7,60 @@
 import sys
 import os
 import re
-from enum import Enum
+from pathlib import Path
 from debian.deb822 import Packages
 from debian.deb822 import Sources
 from debian.debian_support import NativeVersion
 
-rolling_pkg_list_path = "~/.local/config/drk_rolling_pkg_list"
+local_share_path = Path.home().joinpath(".local/share")
+rolling_pkg_list_path = local_share_path.joinpath("drk_rolling_pkg_list")
 rolling_pkg_list_dict = dict()
 
 def print_noisy(msg: str):
     print(msg, file=sys.stderr)
 
 def load_rolling_pkg_list():
-    with open(rolling_pkg_list_path, "r") as rolling_pkg_list_file:
-        for rolling_pkg_list_line in rolling_pkg_list_file:
-            rolling_pkg_list_parts = rolling_pkg_list_line.split(" ")
-            rolling_pkg_name = ""
-            rolling_pkg_version = ""
-            rolling_pkg_no_recommends = ""
-            rolling_pkg_no_suggests = ""
-            if len(rolling_pkg_list_parts) >= 1:
-                rolling_pkg_name = rolling_pkg_list_parts[0]
-            if len(rolling_pkg_list_parts) >= 2:
-                rolling_pkg_version = rolling_pkg_list_parts[1]
-            if len(rolling_pkg_list_parts) >= 3:
-                rolling_pkg_no_recommends = True if rolling_pkg_list_parts[2] == "no_recommends" else False
-                rolling_pkg_no_suggests = True if rolling_pkg_list_parts[2] == "no_suggests" else False
-            if len(rolling_pkg_list_parts) >= 4:
-                rolling_pkg_no_suggests = True if rolling_pkg_list_parts[2] == "no_suggests" else False
+    if rolling_pkg_list_path.is_file():
+        with open(rolling_pkg_list_path, "r") as rolling_pkg_list_file:
+            for rolling_pkg_list_line in rolling_pkg_list_file:
+                rolling_pkg_list_parts = rolling_pkg_list_line.split(" ")
+                rolling_pkg_name = ""
+                rolling_pkg_version = ""
+                rolling_pkg_no_recommends = ""
+                rolling_pkg_no_suggests = ""
+                if len(rolling_pkg_list_parts) >= 1:
+                    rolling_pkg_name = rolling_pkg_list_parts[0].strip()
+                if len(rolling_pkg_list_parts) >= 2:
+                    rolling_pkg_version = rolling_pkg_list_parts[1]
+                if len(rolling_pkg_list_parts) >= 3:
+                    rolling_pkg_no_recommends = True if rolling_pkg_list_parts[2].strip()  == "no_recommends" else False
+                    rolling_pkg_no_suggests = True if rolling_pkg_list_parts[2].strip() == "no_suggests" else False
+                if len(rolling_pkg_list_parts) >= 4:
+                    rolling_pkg_no_suggests = True if rolling_pkg_list_parts[2].strip() == "no_suggests" else False
 
-            rolling_pkg_list_dict.update({
-                rolling_pkg_name: {
-                    "version": rolling_pkg_version,
-                    "no_recommends": rolling_pkg_no_recommends,
-                    "no_suggests": rolling_pkg_no_suggests
-                }
-            })
+                rolling_pkg_list_dict.update({
+                    rolling_pkg_name: {
+                        "version": rolling_pkg_version,
+                        "no_recommends": rolling_pkg_no_recommends,
+                        "no_suggests": rolling_pkg_no_suggests
+                    }
+                })
+    else:
+        if rolling_pkg_list_path.exists():
+            raise FileExistsError("{} exists but is not a normal file or a symlink to a normal file!".format(rolling_pkg_list_path))
+        else:
+            os.makedirs(local_share_path)
+            rolling_pkg_list_path.touch()
 
 def save_rolling_pkg_list():
     with open(rolling_pkg_list_path, "w") as rolling_pkg_list_file:
-        for pkg_name, pkg_info in rolling_pkg_list_dict:
+        for pkg_name, pkg_info in rolling_pkg_list_dict.items():
             build_line = pkg_name
             if "version" in pkg_info:
                 build_line = build_line + " " + pkg_info["version"]
-            if "no_recommends" in pkg_info and pkg_info["no_recommends"] != "":
+            if "no_recommends" in pkg_info and pkg_info["no_recommends"] != "False":
                 build_line = build_line + " " + "no_recommends"
-            if "no_suggests" in pkg_info and pkg_info["no_suggests"] != "":
+            if "no_suggests" in pkg_info and pkg_info["no_suggests"] != "False":
                 build_line = build_line + " " + "no_suggests"
             rolling_pkg_list_file.write(build_line + "\n")
 
@@ -144,16 +152,9 @@ def filter_db(merge_pkg_dict: dict, main_pkg_db: dict, filter_pkg_db: dict):
     output_pkg_dict = merge_pkg_dict.copy()
 
     for pkg_remove_name in pkg_remove_list:
-        output_pkg_dict.pop(pkg_remove_name)
+        output_pkg_dict.pop(pkg_remove_name, None)
 
     return output_pkg_dict
-
-
-class DrkDepListMode(Enum):
-    FULL = 1
-    FRESH = 2
-    ROLLING = 3
-    UNDEFINED = 4
 
 def convert_to_pkg_list(pkg_str):
     output_list = []
@@ -176,23 +177,23 @@ def convert_to_pkg_list(pkg_str):
 
     return output_list
 
-def generate_dep_list(dep_list_mode: DrkDepListMode, no_list_recommends: bool, no_list_suggests: bool, is_src_pkg: bool, unstable_bin_db: dict, testing_bin_db: dict, rolling_bin_db: dict, unstable_src_db: dict, unstable_pkg_name: str):
+def generate_dep_list(no_list_recommends: bool, no_list_suggests: bool, is_src_pkg: bool, primary_bin_db: dict, filter_bin_db_list: list, primary_src_db: dict, target_pkg_name: str):
 
     if is_src_pkg:
-        if not unstable_pkg_name in unstable_src_db:
+        if not target_pkg_name in primary_src_db:
             raise KeyError("The specified package does not exist in Debian Unstable!")
     else:
-        if not unstable_pkg_name in unstable_bin_db:
+        if not target_pkg_name in primary_bin_db:
             raise KeyError("The specified package does not exist in Debian Unstable!")
 
     output_pkg_dict = dict()
     handled_virtual_pkg_set = set()
 
     if is_src_pkg:
-        unstable_pkg = unstable_src_db[unstable_pkg_name]
+        unstable_pkg = primary_src_db[target_pkg_name]
     else:
-        unstable_pkg = unstable_bin_db[unstable_pkg_name]
-        output_pkg_dict.update(unstable_pkg["Package"])
+        unstable_pkg = primary_bin_db[target_pkg_name]
+        output_pkg_dict.update(dict.fromkeys(unstable_pkg["Package"]))
 
     if "Build-Depends" in unstable_pkg:
         output_pkg_dict.update(dict.fromkeys(convert_to_pkg_list(unstable_pkg["Build-Depends"])))
@@ -209,12 +210,12 @@ def generate_dep_list(dep_list_mode: DrkDepListMode, no_list_recommends: bool, n
 
     idx = 0
     while idx < len(output_pkg_dict):
-        unstable_pkg_name = list(output_pkg_dict.keys())[idx]
-        if unstable_pkg_name == "":
+        target_pkg_name = list(output_pkg_dict.keys())[idx]
+        if target_pkg_name == "":
             idx += 1
             continue
-        if unstable_pkg_name in unstable_bin_db: # Normal package
-            unstable_pkg = unstable_bin_db[unstable_pkg_name]
+        if target_pkg_name in primary_bin_db: # Normal package
+            unstable_pkg = primary_bin_db[target_pkg_name]
             # No need to take Build-Depends and Binary into account here,
             # we're only dealing with binary packages now.
             if "Pre-Depends" in unstable_pkg:
@@ -225,34 +226,22 @@ def generate_dep_list(dep_list_mode: DrkDepListMode, no_list_recommends: bool, n
                 output_pkg_dict.update(dict.fromkeys(convert_to_pkg_list(unstable_pkg["Recommends"])))
             if "Suggests" in unstable_pkg and not no_list_suggests:
                 output_pkg_dict.update(dict.fromkeys(convert_to_pkg_list(unstable_pkg["Suggests"])))
-        elif unstable_pkg_name not in handled_virtual_pkg_set: # Virtual package
+        elif target_pkg_name not in handled_virtual_pkg_set: # Virtual package
             provide_pkg_list = []
-            for search_pkg_name, search_pkg in unstable_bin_db.items():
+            for search_pkg_name, search_pkg in primary_bin_db.items():
                 if "Provides" in search_pkg:
                     search_pkg_provide_list = convert_to_pkg_list(search_pkg["Provides"])
-                    if unstable_pkg_name in search_pkg_provide_list:
+                    if target_pkg_name in search_pkg_provide_list:
                         provide_pkg_list.append(search_pkg_name)
             output_pkg_dict.update(dict.fromkeys(provide_pkg_list))
-            handled_virtual_pkg_set.add(unstable_pkg_name)
+            handled_virtual_pkg_set.add(target_pkg_name)
 
         idx += 1
 
     for remove_pkg_name in handled_virtual_pkg_set:
-        output_pkg_dict.pop(remove_pkg_name)
+        output_pkg_dict.pop(remove_pkg_name, None)
 
-    if dep_list_mode == DrkDepListMode.FULL:
-        return output_pkg_dict
-#        print("\n".join(output_pkg_dict.keys()))
-#        return
+    for filter_bin_db in filter_bin_db_list:
+        output_pkg_dict = filter_db(output_pkg_dict, primary_bin_db, filter_bin_db)
 
-    output_pkg_dict = filter_db(output_pkg_dict, unstable_bin_db, testing_bin_db)
-    if dep_list_mode == DrkDepListMode.FRESH:
-        return output_pkg_dict
-#        print("\n".join(output_pkg_dict.keys()))
-#        return
-
-    output_pkg_dict = filter_db(output_pkg_dict, unstable_bin_db, rolling_bin_db)
-    if dep_list_mode == DrkDepListMode.ROLLING:
-        return output_pkg_dict
-#        print("\n".join(output_pkg_dict.keys()))
-#        return
+    return output_pkg_dict

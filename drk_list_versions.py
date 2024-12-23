@@ -10,6 +10,10 @@ import re
 
 def run_command():
     arg_list = sys.argv[2:len(sys.argv)]
+    if len(arg_list) < 1:
+        print_noisy("ERROR: No package provided!")
+        sys.exit(1)
+
     pkg_name = arg_list[0]
     is_src_pkg = True if re.match("src:", pkg_name) else False
 

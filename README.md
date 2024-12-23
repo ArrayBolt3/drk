@@ -34,13 +34,14 @@ drk <action> <argument1> [<argument2> ...]
   and prints out the full list of packages that need imported into the Rolling
   archive to introduce the package into the archive. This is very similar to
   `generate-dep-list`, but with the rolling package list taken into account.
-* `remove-package [--restrict-architectures=arch1[,arch2,...]
-  <bin-package|src:src-package>` - Removes a package from drk's
+* `remove-package <bin-package|src:src-package>` - Removes a package from drk's
   rolling package list, and prints out the full list of packages that need
   removed from the Rolling archive to remove the package from the archive. This
   will avoid breaking the installability of any other explicitly introduced
   packages in Rolling, but may remove packages in Rolling that do not yet have
-  equal or newer versions present in Testing. Use with care!
+  equal or newer versions present in Testing. Requires drk's rolling package
+  list to be up-to-date, and makes permanent changes to that list. Use with
+  care!
 * `clean-archive` - Finds all packages in Rolling with equal or newer versions
   present in Testing, and lists them. Also removes outdated packages from drk's
   rolling package list.

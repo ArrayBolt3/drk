@@ -6,9 +6,16 @@
 import drk_lib
 from drk_lib import *
 import sys
+from enum import Enum
+
+class DrkDepListMode(Enum):
+    FULL = 1
+    FRESH = 2
+    ROLLING = 3
+    UNDEFINED = 4
 
 def run_command():
-    dep_list_mode = DrkDepListMode.UNDEFINED
+    dep_list_mode = DrkDepListMode.FULL
     no_list_recommends = False
     no_list_suggests = False
     unstable_pkg_name = ""
@@ -34,6 +41,10 @@ def run_command():
             unstable_pkg_name = arg
             break
 
+    if unstable_pkg_name == "":
+        print_noisy("ERROR: No package provided!")
+        sys.exit(1)
+
     is_src_pkg = True if re.match("src:", unstable_pkg_name) else False
     if is_src_pkg:
         unstable_pkg_name = unstable_pkg_name[4:len(unstable_pkg_name)]
@@ -52,7 +63,12 @@ def run_command():
         rolling_bin_db = get_binary_db("rolling")
 
     unstable_src_db = get_source_db("unstable")
+    filter_bin_db_list = list()
+    if dep_list_mode == DrkDepListMode.FRESH:
+        filter_bin_db_list = [testing_bin_db]
+    elif dep_list_mode == DrkDepListMode.ROLLING:
+        filter_bin_db_list = [testing_bin_db, rolling_bin_db]
 
-    output_pkg_dict = drk_lib.generate_dep_list(dep_list_mode, no_list_recommends, no_list_suggests, is_src_pkg, unstable_bin_db, testing_bin_db, rolling_bin_db, unstable_src_db, unstable_pkg_name)
+    output_pkg_dict = drk_lib.generate_dep_list(no_list_recommends, no_list_suggests, is_src_pkg, unstable_bin_db, filter_bin_db_list, unstable_src_db, unstable_pkg_name)
 
     print("\n".join(output_pkg_dict.keys()))

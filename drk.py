@@ -7,6 +7,7 @@ import drk_lib
 from drk_lib import *
 import drk_list_versions
 import drk_generate_dep_list
+import drk_add_package
 import sys
 
 def print_usage():
@@ -16,6 +17,7 @@ Run DRK commands.
 Available commands:
   list-versions      Shows the versions of a package in Testing, Rolling, and Unstable
   generate-dep-list  Get a list containing a package and its dependencies
+  add-package        Adds a package to Rolling
   remove-package     Removes a package from Rolling
   clean-archive      Automatically removes obsolete packages from Rolling""")
 
@@ -27,7 +29,7 @@ def main():
         case "generate-dep-list":
             drk_generate_dep_list.run_command()
         case "add-package":
-            print(4)
+            drk_add_package.run_command()
         case "remove-package":
             print(5)
         case "clean-archive":
